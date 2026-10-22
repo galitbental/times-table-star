@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Times Table Star</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+    --bg: #fff8ec;
+    --ink: #2b2140;
+    --muted: #8a7fa3;
+    --card: #ffffff;
+    --accent: #ff7a59;
+    --good: #22c55e;
+    --bad: #ef4444;
+    --chip: #f1e9ff;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100dvh;
+    display: grid; place-items: center;
+    background: var(--bg); color: var(--ink);
+    font-family: "Fredoka", system-ui, sans-serif;
+    padding: 16px;
+    -webkit-tap-highlight-color: transparent;
+  }
+  main { width: 100%; max-width: 420px; text-align: center; }
+  h1 { font-size: 28px; margin: 0 0 4px; }
+  .sub { color: var(--muted); margin: 0 0 20px; }
+
+  .tables { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-bottom: 20px; }
+  .chip {
+    border: 0; border-radius: 999px; padding: 8px 14px;
+    font: 600 16px "Fredoka", sans-serif; color: var(--ink);
+    background: var(--chip); cursor: pointer;
+    transition: transform 140ms var(--ease-out), background-color 150ms ease, color 150ms ease;
+  }
+  .chip:active { transform: scale(0.95); }
+  .chip[aria-pressed="true"] { background: var(--ink); color: #fff; }
+
+  .stats { display: flex; justify-content: space-between; font-weight: 600; margin-bottom: 12px; }
+  .stars { color: #f5a623; }
+
+  .card {
+    background: var(--card); border-radius: 28px; padding: 32px 20px;
+    box-shadow: 0 1px 0 rgba(0,0,0,.04), 0 12px 32px -12px rgba(43,33,64,.18);
+    transition: box-shadow 200ms ease;
+  }
+  .card.good { box-shadow: 0 0 0 4px var(--good), 0 12px 32px -12px rgba(34,197,94,.4); }
+  .card.bad  { box-shadow: 0 0 0 4px var(--bad); animation: shake 300ms var(--ease-out); }
+  @keyframes shake {
+    25% { transform: translateX(-8px); } 50% { transform: translateX(6px); } 75% { transform: translateX(-3px); }
+  }
+
+  .q { font-size: 56px; font-weight: 700; margin: 0 0 20px; letter-spacing: -0.02em; }
+  .q.enter { animation: qIn 220ms var(--ease-out); }
+  @keyframes qIn { from { opacity: 0; transform: translateY(8px) scale(0.96); filter: blur(2px); } }
+
+  input {
+    width: 160px; font: 700 40px "Fredoka", sans-serif; text-align: center;
+    border: 3px solid var(--chip); border-radius: 18px; padding: 8px; color: var(--ink);
+    outline: none; transition: border-color 150ms ease;
+  }
+  input:focus { border-color: var(--accent); }
+
+  .go {
+    display: block; margin: 16px auto 0; border: 0; border-radius: 18px;
+    padding: 14px 36px; font: 700 20px "Fredoka", sans-serif;
+    background: var(--accent); color: #fff; cursor: pointer;
+    box-shadow: 0 4px 0 #d9583a;
+    transition: transform 120ms var(--ease-out), box-shadow 120ms var(--ease-out);
+  }
+  .go:active { transform: translateY(3px) scale(0.98); box-shadow: 0 1px 0 #d9583a; }
+
+  .msg { min-height: 28px; margin-top: 14px; font-weight: 600; font-size: 20px; }
+
+  .confetti { position: fixed; inset: 0; pointer-events: none; overflow: hidden; }
+  .bit { position: absolute; top: 40%; left: 50%; width: 10px; height: 14px; border-radius: 3px; }
+
+  @media (hover: hover) and (pointer: fine) {
+    .chip:hover { background: #e4d6ff; }
+    .chip[aria-pressed="true"]:hover { background: var(--ink); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .card.bad { animation: none; }
+    .q.enter { animation: fade 200ms ease; }
+    @keyframes fade { from { opacity: 0; } }
+  }
+</style>
+</head>
+<body>
+<main>
+  <h1>⭐ Times Table Star</h1>
+  <p class="sub">Pick a table and start!</p>
+
+  <div class="tables" id="tables"></div>
+
+  <div class="stats">
+    <span>🔥 Streak: <span id="streak">0</span></span>
+    <span class="stars" id="stars">★ 0</span>
+  </div>
+
+  <div class="card" id="card">
+    <p class="q" id="q"></p>
+    <form id="form" autocomplete="off">
+      <input id="answer" type="number" inputmode="numeric" aria-label="Your answer" required>
+      <button class="go" type="submit">Check</button>
+    </form>
+    <div class="msg" id="msg" aria-live="polite"></div>
+  </div>
+</main>
+<div class="confetti" id="confetti"></div>
+
+<script>
+  const $ = id => document.getElementById(id);
+  const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const praise = ['Great job! 🎉', 'Awesome! 🚀', 'You rock! 🌟', 'Super! 💪', 'Brilliant! 🧠'];
+  let table = 'mix', a, b, streak = 0, stars = 0, locked = false;
+
+  // Table picker: "Mix" plus 1–10
+  ['mix', 1, 2, 3, 4, 5, 6, 7, 8, 9, 10].forEach(t => {
+    const btn = document.createElement('button');
+    btn.className = 'chip';
+    btn.textContent = t === 'mix' ? '🎲 Mix' : '×' + t;
+    btn.setAttribute('aria-pressed', t === table);
+    btn.onclick = () => {
+      table = t;
+      document.querySelectorAll('.chip').forEach(c => c.setAttribute('aria-pressed', c === btn));
+      next();
+    };
+    $('tables').append(btn);
+  });
+
+  function next() {
+    a = table === 'mix' ? rand() : table;
+    b = rand();
+    if (Math.random() < 0.5) [a, b] = [b, a];
+    const q = $('q');
+    q.textContent = `${a} × ${b}`;
+    q.classList.remove('enter'); void q.offsetWidth; q.classList.add('enter');
+    $('card').className = 'card';
+    $('msg').textContent = '';
+    $('answer').value = '';
+    $('answer').focus();
+    locked = false;
+  }
+  const rand = () => 1 + Math.floor(Math.random() * 10);
+
+  $('form').onsubmit = e => {
+    e.preventDefault();
+    if (locked || $('answer').value === '') return;
+    const card = $('card');
+    if (+$('answer').value === a * b) {
+      locked = true;
+      streak++; stars++;
+      card.className = 'card good';
+      $('msg').style.color = 'var(--good)';
+      $('msg').textContent = praise[Math.floor(Math.random() * praise.length)];
+      if (streak % 5 === 0) { $('msg').textContent = `${streak} in a row! 🏆`; confetti(); }
+      setTimeout(next, 900);
+    } else {
+      streak = 0;
+      card.className = 'card'; void card.offsetWidth; card.className = 'card bad';
+      $('msg').style.color = 'var(--bad)';
+      $('msg').textContent = 'Almost! Try again 💛';
+      $('answer').select();
+    }
+    $('streak').textContent = streak;
+    $('stars').textContent = '★ ' + stars;
+  };
+
+  // Rare reward (every 5 in a row), so it earns some delight
+  function confetti() {
+    if (reduceMotion) return;
+    const colors = ['#ff7a59', '#f5a623', '#22c55e', '#3b82f6', '#a855f7', '#ec4899'];
+    for (let i = 0; i < 40; i++) {
+      const bit = document.createElement('div');
+      bit.className = 'bit';
+      bit.style.background = colors[i % colors.length];
+      $('confetti').append(bit);
+      const angle = Math.random() * Math.PI * 2, dist = 120 + Math.random() * 220;
+      const x = Math.cos(angle) * dist, y = Math.sin(angle) * dist - 80;
+      bit.animate([
+        { transform: 'translate(0,0) rotate(0) scale(0.6)', opacity: 1 },
+        { transform: `translate(${x}px, ${y + 260}px) rotate(${Math.random() * 720}deg) scale(1)`, opacity: 0 }
+      ], { duration: 1100 + Math.random() * 500, easing: 'cubic-bezier(0.23, 1, 0.32, 1)' })
+        .onfinish = () => bit.remove();
+    }
+  }
+
+  next();
+</script>
+</body>
+</html>
